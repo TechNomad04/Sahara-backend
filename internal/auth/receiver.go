@@ -1,4 +1,4 @@
-package receivers
+package auth
 
 import (
 	"database/sql"
