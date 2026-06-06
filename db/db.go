@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	_ "github.com/lib/pq"
 )
 
 func InitDB() *sql.DB {

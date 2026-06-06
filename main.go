@@ -1,4 +1,4 @@
-package server
+package main
 
 import (
 	"sahara/db"
@@ -27,5 +27,5 @@ func main() {
 		h.Logout,
 	)
 
-	r.Run(":8000")
+	r.Run(":8080")
 }
