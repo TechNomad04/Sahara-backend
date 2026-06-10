@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"sahara/internal/store"
+	"sahara/models"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -79,13 +80,14 @@ func Persist(ctx context.Context, r *store.Redis, t *Token) error {
 	return nil
 }
 
-func SendTokens(c *gin.Context, t *Token) {
+func SendTokens(c *gin.Context, t *Token, user models.User) {
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  t.Access,
 		"refresh_token": t.Refresh,
 		"access_exp":    t.ExpAcc,
 		"refresh_exp":   t.ExpRef,
 		"user_id":       t.UserID,
+		"user": user,
 	})
 }
 

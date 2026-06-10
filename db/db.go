@@ -1,16 +1,17 @@
 package db
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
 	"time"
+	"gorm.io/driver/postgres"
 
 	_ "github.com/lib/pq"
+	"gorm.io/gorm"
 )
 
-func InitDB() *sql.DB {
+func InitDB() *gorm.DB {
 
 	connStr := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
@@ -21,20 +22,30 @@ func InitDB() *sql.DB {
 		os.Getenv("DB_NAME"),
 	)
 
-	var db *sql.DB
+	var db *gorm.DB
 	var err error
 
 	for i := 0; i < 10; i++ {
-
-		db, err = sql.Open("postgres", connStr)
+		db, err = gorm.Open(postgres.Open(connStr), &gorm.Config{})
 		if err != nil {
 			log.Println(err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
 
-		err = db.Ping()
+		sqlDB, err := db.DB()
+		if err != nil {
+			log.Println(err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		err = sqlDB.Ping()
 		if err == nil {
+			sqlDB.SetMaxOpenConns(25)
+			sqlDB.SetMaxIdleConns(5)
+			sqlDB.SetConnMaxLifetime(5 * time.Minute)
+
 			log.Println("Connected to db")
 			return db
 		}

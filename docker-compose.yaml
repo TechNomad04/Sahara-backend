@@ -16,7 +16,7 @@ services:
       - app-network
 
   redis:
-    image: redis:7
+    image: redis:8.6.4
     container_name: redis-cache
     restart: always
     ports:
