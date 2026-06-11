@@ -5,6 +5,8 @@ import (
 	"sahara/db"
 	"sahara/internal/app"
 	"sahara/internal/auth"
+	"sahara/internal/controllers"
+	"sahara/internal/middlewares"
 	"sahara/internal/store"
 	"sahara/models"
 
@@ -23,10 +25,18 @@ func main() {
 	h := &auth.Handler{
 		Dependencies: deps,
 	}
+	h2 := &controllers.Handler{
+		Dependencies: deps,
+	}
 
 	r := gin.Default()
 
 	err := database.AutoMigrate(&models.User{})
+    if err != nil {
+        log.Fatal("failed to migrate database:", err)
+    }
+
+	err = database.AutoMigrate(&models.Request{})
     if err != nil {
         log.Fatal("failed to migrate database:", err)
     }
@@ -41,6 +51,8 @@ func main() {
 		auth.AuthMiddleware(redisClient),
 		h.Logout,
 	)
+
+	r.GET("/api/requests/feed", auth.AuthMiddleware(redisClient), middlewares.DefaultPagination(), h2.FetchRequests)
 
 	r.Run(":8080")
 }
