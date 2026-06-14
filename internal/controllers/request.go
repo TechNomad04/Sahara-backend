@@ -108,34 +108,63 @@ func (h *Handler) FetchRequests(c *gin.Context) {
 }
 
 func (h *Handler) CreateRequest(c *gin.Context) {
+
 	var req struct {
-		Title          string   `json:"title"`
-		Description    string   `json:"description"`
-		Categories     []string `json:"categories"`
-		OrganizationId int      `json:"organizationId"`
-		Country        string   `json:"country"`
-		State          string   `json:"state"`
-		City           string   `json:"city"`
+		Title       string   `json:"title"`
+		Description string   `json:"description"`
+		Categories  []string `json:"categories"`
+		Country     string   `json:"country"`
+		State       string   `json:"state"`
+		City        string   `json:"city"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H {
-			"error" : "Bad Request",
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "bad request",
 		})
 		return
 	}
 
-	//check to see if similar entries in db (semantic search)
+	entityType := c.MustGet("entityType").(string)
 
-	if err := h.DB.Create(&req).Error; err != nil {
+	if entityType != "organization" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "only organizations can create requests",
+		})
+		return
+	}
+
+	userID := c.MustGet("userID").(string)
+
+	orgID, err := strconv.ParseUint(userID, 10, 64)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to create request",
+			"error": "invalid organization id",
 		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H {
-		"request" : req,
+	request := models.Request{
+		Title:          req.Title,
+		Description:    req.Description,
+		Categories:     req.Categories,
+		IssuerId: uint(orgID),
+		Country:        req.Country,
+		State:          req.State,
+		City:           req.City,
+	}
+
+	// TODO:
+	// semantic search duplicate detection
+
+	if err := h.DB.Create(&request).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to create request",
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"request": request,
 	})
 }
-
