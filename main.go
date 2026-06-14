@@ -41,6 +41,11 @@ func main() {
         log.Fatal("failed to migrate database:", err)
     }
 
+	err = database.AutoMigrate(&models.Issuer{})
+    if err != nil {
+        log.Fatal("failed to migrate database:", err)
+    }
+
 	r.GET("/auth/google", auth.GoogleLogin)
 	r.GET("/auth/google/callback", h.GoogleCallback)
 
@@ -53,6 +58,7 @@ func main() {
 	)
 
 	r.GET("/api/requests/feed", auth.AuthMiddleware(redisClient), middlewares.DefaultPagination(), h2.FetchRequests)
+	r.POST("/api/requests", auth.AuthMiddleware(redisClient), h2.CreateRequest)
 
 	r.Run(":8080")
 }
