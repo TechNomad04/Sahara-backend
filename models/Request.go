@@ -35,8 +35,8 @@ type Request struct {
 	State            string         `gorm:"size:100;not null" json:"state"`
 	City             string         `gorm:"size:100;not null" json:"city"`
 	Status           RequestStatus  `gorm:"type:varchar(20);default:'working'" json:"status"`
-	IssuerId uint `json:"issuerId"`
-	Issuer Issuer `gorm:"foreignKey:IssuerId"`
+	IssuerId         uint           `json:"issuerId"`
+	Issuer           Organization   `gorm:"foreignKey:IssuerId"`
 	ParticipantCount int            `gorm:"not null" json:"participantCount"`
 	CreatedAt        time.Time      `gorm:"autoCreateTime" json:"createdAt"`
 }

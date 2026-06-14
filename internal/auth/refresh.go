@@ -73,6 +73,7 @@ func (h *Handler) Refresh(c *gin.Context) {
 
 	toks, err := IssueToken(
 		claims.Subject,
+		claims.EntityType,
 	)
 
 	if err != nil {

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"sahara/internal/store"
-	"sahara/models"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,58 +13,77 @@ import (
 	"github.com/google/uuid"
 )
 
-type Token struct {
-	Access string
-	Refresh string
-	JTIAcc string
-	JTIRef string
-	ExpAcc time.Time
-	ExpRef time.Time
-	UserID string
-	Issuer string
-	Audience string
+type Claims struct {
+	EntityType string `json:"entity_type"`
+	jwt.RegisteredClaims
 }
 
-func IssueToken(userID string) (*Token, error) {
+type Token struct {
+	Access     string
+	Refresh    string
+	JTIAcc     string
+	JTIRef     string
+	ExpAcc     time.Time
+	ExpRef     time.Time
+	UserID     string
+	EntityType string
+	Issuer     string
+	Audience   string
+}
+
+func IssueToken(userID, entityType string) (*Token, error) {
 	now := time.Now()
+
 	t := &Token{
-		UserID: userID,
-		JTIAcc: uuid.NewString(),
-		JTIRef: uuid.NewString(),
-		ExpAcc: now.Add(15 * time.Minute),
-		ExpRef: now.Add(7 * 24 * time.Hour),
-		Issuer: "sahara",
-		Audience: "sahara-client",
+		UserID:     userID,
+		EntityType: entityType,
+		JTIAcc:     uuid.NewString(),
+		JTIRef:     uuid.NewString(),
+		ExpAcc:     now.Add(15 * time.Minute),
+		ExpRef:     now.Add(7 * 24 * time.Hour),
+		Issuer:     "sahara",
+		Audience:   "sahara-client",
 	}
 
-	acc := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-		Subject: userID,
-		ID: t.JTIAcc,
-		Issuer : t.Issuer,
-		Audience: jwt.ClaimStrings{t.Audience},
-		IssuedAt : jwt.NewNumericDate(now),
-		ExpiresAt : jwt.NewNumericDate(t.ExpAcc),
-	})
+	accClaims := Claims{
+		EntityType: entityType,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   userID,
+			ID:        t.JTIAcc,
+			Issuer:    t.Issuer,
+			Audience:  jwt.ClaimStrings{t.Audience},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(t.ExpAcc),
+		},
+	}
 
-	ref := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-		Subject: userID,
-		ID: t.JTIRef,
-		Issuer : t.Issuer,
-		Audience: jwt.ClaimStrings{t.Audience},
-		IssuedAt : jwt.NewNumericDate(now),
-		ExpiresAt : jwt.NewNumericDate(t.ExpRef),
-	})
+	refClaims := Claims{
+		EntityType: entityType,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   userID,
+			ID:        t.JTIRef,
+			Issuer:    t.Issuer,
+			Audience:  jwt.ClaimStrings{t.Audience},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(t.ExpRef),
+		},
+	}
+
+	acc := jwt.NewWithClaims(jwt.SigningMethodHS256, accClaims)
+	ref := jwt.NewWithClaims(jwt.SigningMethodHS256, refClaims)
 
 	var err error
+
 	t.Access, err = acc.SignedString([]byte(os.Getenv("ACCESS_SECRET")))
 	if err != nil {
-		return nil ,err
+		return nil, err
 	}
 
 	t.Refresh, err = ref.SignedString([]byte(os.Getenv("REFRESH_SECRET")))
 	if err != nil {
 		return nil, err
 	}
+
 	return t, nil
 }
 
@@ -77,54 +95,69 @@ func Persist(ctx context.Context, r *store.Redis, t *Token) error {
 	if err := r.SetJTI(ctx, "refresh:"+t.JTIRef, t.UserID, t.ExpRef); err != nil {
 		return err
 	}
+
 	return nil
 }
 
-func SendTokens(c *gin.Context, t *Token, user models.User) {
+func SendTokens(c *gin.Context, t *Token, entity any) {
 	c.JSON(http.StatusOK, gin.H{
 		"access_token":  t.Access,
 		"refresh_token": t.Refresh,
 		"access_exp":    t.ExpAcc,
 		"refresh_exp":   t.ExpRef,
 		"user_id":       t.UserID,
-		"user": user,
+		"entity_type":   t.EntityType,
+		"entity":        entity,
 	})
 }
 
-func ParseAccess(tokenStr string) (*jwt.RegisteredClaims, error) {
-	secret := os.Getenv("ACCESS_SECRET")
-	return parseWithSecret(tokenStr, secret)
+func ParseAccess(tokenStr string) (*Claims, error) {
+	return parseWithSecret(
+		tokenStr,
+		os.Getenv("ACCESS_SECRET"),
+	)
 }
 
-
-func ParseRefresh(tokenStr string) (*jwt.RegisteredClaims, error) {
-	secret := os.Getenv("REFRESH_SECRET")
-	return parseWithSecret(tokenStr, secret)
+func ParseRefresh(tokenStr string) (*Claims, error) {
+	return parseWithSecret(
+		tokenStr,
+		os.Getenv("REFRESH_SECRET"),
+	)
 }
 
-func parseWithSecret(tokenStr, secret string) (*jwt.RegisteredClaims, error) {
+func parseWithSecret(tokenStr, secret string) (*Claims, error) {
 	if secret == "" {
 		return nil, errors.New("jwt secret not configured")
 	}
 
-	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	parser := jwt.NewParser(
+		jwt.WithValidMethods(
+			[]string{jwt.SigningMethodHS256.Alg()},
+		),
+	)
 
-	token, err := parser.ParseWithClaims(tokenStr, &jwt.RegisteredClaims{}, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
-		}
-		return []byte(secret), nil
-	})
+	token, err := parser.ParseWithClaims(
+		tokenStr,
+		&Claims{},
+		func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, errors.New("unexpected signing method")
+			}
+			return []byte(secret), nil
+		},
+	)
+
 	if err != nil {
 		return nil, err
 	}
 
-	claims, ok := token.Claims.(*jwt.RegisteredClaims)
+	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
 		return nil, errors.New("invalid token")
 	}
 
-	if claims.ExpiresAt != nil && time.Now().After(claims.ExpiresAt.Time) {
+	if claims.ExpiresAt != nil &&
+		time.Now().After(claims.ExpiresAt.Time) {
 		return nil, errors.New("token expired")
 	}
 

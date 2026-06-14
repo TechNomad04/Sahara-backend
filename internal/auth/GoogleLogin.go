@@ -7,9 +7,18 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func GoogleLogin(c *gin.Context) {
+func GoogleUserLogin(c *gin.Context) {
 	url := GoogleConfig.AuthCodeURL(
-		"random-state",
+		"user",
+		oauth2.AccessTypeOffline,
+	)
+
+	c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+func GoogleOrganizationLogin(c *gin.Context) {
+	url := GoogleConfig.AuthCodeURL(
+		"organization",
 		oauth2.AccessTypeOffline,
 	)
 

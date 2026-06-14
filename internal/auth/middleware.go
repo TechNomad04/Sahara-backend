@@ -27,27 +27,41 @@ func BearerFromHeader(c *gin.Context) string {
 
 func AuthMiddleware(r *store.Redis) gin.HandlerFunc {
 	return func(c *gin.Context) {
+
 		tokenStr := BearerFromHeader(c)
+
 		if tokenStr == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H {
-				"Error" : "missing bearer token",
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "missing bearer token",
 			})
 			return
 		}
 
 		claims, err := ParseAccess(tokenStr)
+
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid token",
+			})
 			return
 		}
 
 		ctx := context.Background()
-		if _, err := r.GetUserByJTI(ctx, "access:"+claims.ID); err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token revoked"})
+
+		if _, err := r.GetUserByJTI(
+			ctx,
+			"access:"+claims.ID,
+		); err != nil {
+
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "token revoked",
+			})
 			return
 		}
 
 		c.Set("userID", claims.Subject)
+		c.Set("entityType", claims.EntityType)
+
 		c.Next()
 	}
 }

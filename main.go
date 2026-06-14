@@ -41,12 +41,13 @@ func main() {
         log.Fatal("failed to migrate database:", err)
     }
 
-	err = database.AutoMigrate(&models.Issuer{})
+	err = database.AutoMigrate(&models.Organization{})
     if err != nil {
         log.Fatal("failed to migrate database:", err)
     }
 
-	r.GET("/auth/google", auth.GoogleLogin)
+	r.GET("/auth/google/user", auth.GoogleUserLogin)
+	r.GET("/auth/google/organization", auth.GoogleOrganizationLogin)
 	r.GET("/auth/google/callback", h.GoogleCallback)
 
 	r.POST("/auth/refresh", h.Refresh)
