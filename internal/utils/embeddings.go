@@ -2,7 +2,6 @@ package utils
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 
 	"github.com/go-resty/resty/v2"
@@ -30,13 +29,4 @@ func GenerateEmbedding(text string) ([]float32, error) {
 	}
 
 	return embedding, nil
-}
-
-func main() {
-	embedding, err := GenerateEmbedding("What is machine learning?")
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println("Dimension:", len(embedding))
 }
