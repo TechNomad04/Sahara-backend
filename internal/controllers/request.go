@@ -1,11 +1,14 @@
 package controllers
 
 import (
+	"context"
 	"net/http"
+	"sahara/internal/utils"
 	"sahara/models"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/qdrant/go-client/qdrant"
 )
 
 func (h *Handler) FetchRequests(c *gin.Context) {
@@ -145,21 +148,107 @@ func (h *Handler) CreateRequest(c *gin.Context) {
 	}
 
 	request := models.Request{
-		Title:          req.Title,
-		Description:    req.Description,
-		Categories:     req.Categories,
-		IssuerId: uint(orgID),
-		Country:        req.Country,
-		State:          req.State,
-		City:           req.City,
+		Title:       req.Title,
+		Description: req.Description,
+		Categories:  req.Categories,
+		IssuerId:    uint(orgID),
+		Country:     req.Country,
+		State:       req.State,
+		City:        req.City,
 	}
 
-	// TODO:
-	// semantic search duplicate detection
+	combinedText := req.Title + "\n" + req.Description
 
-	if err := h.DB.Create(&request).Error; err != nil {
+	embedding, err := utils.GenerateEmbedding(combinedText)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to generate embedding",
+		})
+		return
+	}
+
+	limit := uint64(1)
+
+	result, err := h.Qdrant.Client.Query(
+		context.Background(),
+		&qdrant.QueryPoints{
+			CollectionName: "documents",
+			Query:          qdrant.NewQuery(embedding...),
+			Limit:          &limit,
+			Filter: &qdrant.Filter{
+				Must: []*qdrant.Condition{
+					qdrant.NewMatch(
+						"issuerId",
+						strconv.FormatUint(uint64(request.IssuerId), 10),
+					),
+				},
+			},
+		},
+	)
+
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to create request",
+		})
+		return
+	}
+
+	if len(result) > 0 && result[0].Score > 0.8 {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "similar request already exists",
+		})
+		return
+	}
+
+	tx := h.DB.Begin()
+
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to start transaction",
+		})
+		return
+	}
+
+	if err := tx.Create(&request).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to create request",
+		})
+		return
+	}
+
+	point := &qdrant.PointStruct{
+		Id:      qdrant.NewIDNum(uint64(request.ID)),
+		Vectors: qdrant.NewVectors(embedding...),
+		Payload: qdrant.NewValueMap(map[string]any{
+			"text":        combinedText,
+			"request_id":  request.ID,
+			"title":       request.Title,
+			"description": request.Description,
+			"country":     request.Country,
+			"state":       request.State,
+			"city":        request.City,
+			"issuerId": strconv.FormatUint(uint64(request.IssuerId), 10),
+		}),
+	}
+
+	_, err = h.Qdrant.Client.Upsert(context.Background(), &qdrant.UpsertPoints{
+		CollectionName: "documents",
+		Points: []*qdrant.PointStruct{
+			point,
+		},
+	})
+
+	if err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to store embedding",
+		})
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to commit transaction",
 		})
 		return
 	}
