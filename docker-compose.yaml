@@ -26,6 +26,18 @@ services:
     networks:
       - app-network
 
+  qdrant:
+    image: qdrant/qdrant:dev
+    container_name: qdrant
+    restart: always
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - app-network
+
+
   backend:
     build:
       context: .
@@ -34,6 +46,7 @@ services:
     depends_on:
       - db
       - redis
+      - qdrant
     env_file:
       - ./.env
     ports:
@@ -47,3 +60,4 @@ networks:
 volumes:
   pgdata:
   cache:
+  qdrant_storage:

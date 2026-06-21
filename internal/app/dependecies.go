@@ -9,4 +9,5 @@ import (
 type Dependencies struct {
 	DB    *gorm.DB
 	Redis *store.Redis
+	Qdrant *store.Qdrant
 }

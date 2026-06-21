@@ -16,10 +16,12 @@ import (
 func main() {
 	database := db.InitDB()
 	redisClient := store.NewRedis()
+	qdrantClient := store.NewQdrant()
 
 	deps := &app.Dependencies{
 		DB:    database,
 		Redis: redisClient,
+		Qdrant: qdrantClient,
 	}
 
 	h := &auth.Handler{
