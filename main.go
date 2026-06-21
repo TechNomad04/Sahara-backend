@@ -48,6 +48,8 @@ func main() {
         log.Fatal("failed to migrate database:", err)
     }
 
+	store.CreateCollection(qdrantClient)
+
 	r.GET("/auth/google/user", auth.GoogleUserLogin)
 	r.GET("/auth/google/organization", auth.GoogleOrganizationLogin)
 	r.GET("/auth/google/callback", h.GoogleCallback)
